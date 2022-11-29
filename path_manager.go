@@ -230,59 +230,62 @@ func (pm *pathManager) createPathFromRemote(p *receivedPacket) (*path, error) {
 
 	pth.setup(pm.oliaSenders)
 	pm.sess.paths[pathID] = pth
+
 	//TODO:添加loss和bth的存储逻辑
-	remoteip := pth.conn.RemoteAddr().String()
-	remoteip = remoteip[0:8]
+	curaddr := pth.conn.RemoteAddr().String() //IP+PORT完整地址
+	addrslice := strings.Split(curaddr, ":")
+
+	remoteip := addrslice[0] //IP
+	pth.ip = remoteip
+
+	//建立IP->pathID的映射
 	pm.sess.addrs[remoteip] = pathID
 	fmt.Println(len(pm.sess.paths))
 
-	fmt.Println("update pth status while detecting paths")
+	fmt.Println("----New Path Created, Update Paths' Status----") //更新所有链路状态
 	infofile, err1 := os.Open(pathinfo)
 	if err1 != nil {
 		panic(any(err1))
 	}
 	defer infofile.Close()
+
 	reader := bufio.NewReader(infofile)
 	for {
 		str, err2 := reader.ReadString('\n')
-		if err2 == io.EOF{
+		if err2 == io.EOF {
 			break
 		}
-		stringSlice := strings.Split(str, " ")
 
+		stringSlice := strings.Split(str, " ")
 		ip := stringSlice[0]
 		ip = strings.Replace(ip, "\n", "", -1)
 
 		loss, _ := strconv.ParseFloat(stringSlice[1], 64)
-
 		bth, _ := strconv.ParseFloat(stringSlice[2], 64)
 
 		rttstr := strings.Replace(stringSlice[3], "\n", "", -1)
 		rtt, _ := strconv.ParseFloat(rttstr, 64)
-		//fmt.Println(bth)
 
-		pm.sess.paths[pm.sess.addrs[ip]].loss = loss
-		pm.sess.paths[pm.sess.addrs[ip]].bth = bth
-		pm.sess.paths[pm.sess.addrs[ip]].rtt = rtt
+		addrbths[ip] = bth
+		addrlosses[ip] = loss
+		addrrtts[ip] = rtt
 	}
 
-	//更新各个链路的loss\bth\rtt得分
-	for _, pathid := range pm.sess.addrs{
-		curpth := pm.sess.paths[pathid]
+	//更新链路loss\bth\rtt得分
+	for ip1, _ := range pm.sess.addrs {
 		totallossrate := float64(0)
 		totalbthrate := float64(0)
 		totalrttrate := float64(0)
 
-		for _, pathID1 := range pm.sess.addrs{
-			tmppth := pm.sess.paths[pathID1]
-			totallossrate = totallossrate + curpth.loss/tmppth.loss
-			totalbthrate = totalbthrate + tmppth.bth/curpth.bth
-			totalrttrate = totalrttrate + curpth.rtt/tmppth.rtt
+		for ip2, _ := range pm.sess.addrs {
+			totallossrate = totallossrate + addrlosses[ip1]/addrlosses[ip2]
+			totalbthrate = totalbthrate + addrbths[ip2]/addrbths[ip1]
+			totalrttrate = totalrttrate + addrrtts[ip1]/addrrtts[ip2]
 		}
 
-		curpth.lossscore = 1 / totallossrate
-		curpth.bthscore = 1 / totalbthrate
-		curpth.rttscore = 1 / totalrttrate
+		addrlossscores[ip1] = 1 / totallossrate
+		addrbthscores[ip1] = 1 / totalbthrate
+		addrrttscores[ip1] = 1 / totalrttrate
 	}
 
 	if utils.Debug() {

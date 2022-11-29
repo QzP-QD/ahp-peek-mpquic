@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	//"os"
 	"sync"
 	"time"
 
@@ -59,15 +60,15 @@ type session struct {
 	config       *Config
 
 	//TODO:加入业务类型
-	missiontype	string
-	ahps  			[3]float64
+	missiontype string
+	ahps        [3]float64
 
 	paths       map[protocol.PathID]*path
 	closedPaths map[protocol.PathID]bool
 	pathsLock   sync.RWMutex
 
 	//TODO:加入loss和bth的存储结构
-	addrs 			map[string]protocol.PathID
+	addrs map[string]protocol.PathID
 
 	createPaths bool
 
@@ -214,6 +215,14 @@ func (s *session) setup(
 	s.ahps = s.config.AHPs
 	flagfile = s.config.Flagpth
 
+	addrbths = make(map[string]float64)
+	addrlosses = make(map[string]float64)
+	addrrtts = make(map[string]float64)
+
+	addrbthscores = make(map[string]float64)
+	addrlossscores = make(map[string]float64)
+	addrrttscores = make(map[string]float64)
+
 	s.connectionParameters = handshake.NewConnectionParamatersManager(
 		s.perspective,
 		s.version,
@@ -222,11 +231,46 @@ func (s *session) setup(
 		s.config.IdleTimeout,
 	)
 
-	s.scheduler = &scheduler{SchedulerName:s.config.SchedulerName,
-														Training:s.config.Training,
-														AllowedCongestion:s.config.AllowedCongestion,
-														DumpExp:s.config.DumpExperiences}
+	s.scheduler = &scheduler{SchedulerName: s.config.SchedulerName,
+		Training:          s.config.Training,
+		AllowedCongestion: s.config.AllowedCongestion,
+		DumpExp:           s.config.DumpExperiences}
+
+	s.scheduler.port = s.config.Port
+
 	s.scheduler.setup()
+
+	//PORT = s.config.Port
+	//txpath = "/home/mininet/peekaboo/output/outputtx"+s.scheduler.port+".txt"
+	//wtpath = "/home/mininet/peekaboo/output/outputwt"+s.scheduler.port+".txt"
+	//inputpath = "/home/mininet/peekaboo/input/input"+s.scheduler.port+".txt"
+	//deployedtx = "/home/mininet/peekaboo/output/deployedtx"+s.scheduler.port+".txt"
+	//deployedwt = "/home/mininet/peekaboo/output/deployedwt"+s.scheduler.port+".txt"
+	//deployedtxbak = "/home/mininet/peekaboo/output/deployedtxbak"+s.scheduler.port+".txt"
+	//deployedwtbak = "/home/mininet/peekaboo/output/deployedwtbak"+s.scheduler.port+".txt"
+	//checkqpth = "/home/mininet/peekaboo/input/checkq"+s.scheduler.port+".txt"
+
+	// 创建新的输出文件
+	//var f *os.File
+	//f, _ = os.Create(txpath)
+	//f.Close()
+	//
+	//f, _ = os.Create(wtpath)
+	//f.Close()
+	//
+	//f, _ = os.Create(deployedtx)
+	//f.Close()
+	//
+	//f, _ = os.Create(deployedwt)
+	//f.Close()
+	//
+	//f, _ = os.Create(deployedtxbak)
+	//f.Close()
+	//f, _ = os.Create(deployedwtbak)
+	//f.Close()
+	//f, _ = os.Create(checkqpth)
+	//f.Close()
+
 	//TODO:TestAHP
 	//mediaparams = map[string]float64{
 	//	"rtt": s.ahps[0],
@@ -337,7 +381,7 @@ func (s *session) setup(
 
 // run the session main loop
 func (s *session) run() error {
-	for _, pth := range s.paths{
+	for _, pth := range s.paths {
 		fmt.Println(pth.conn.RemoteAddr())
 	}
 	// Start the crypto stream handler
@@ -545,9 +589,9 @@ func (s *session) handleFrames(fs []wire.Frame, p *path) error {
 			err = s.handleStreamFrame(frame)
 		case *wire.AckFrame:
 			err = s.handleAckFrame(frame)
-			if s.scheduler.SchedulerName == "peek" && state != learning {
+			if s.scheduler.SchedulerName == "peek" && s.scheduler.state != learning {
 				s.scheduler.receivedACKForPeeka(s, frame)
-			}else if s.scheduler.SchedulerName == "rl"{
+			} else if s.scheduler.SchedulerName == "rl" {
 				s.scheduler.receivedACKForRL(s, frame)
 			}
 		case *wire.ConnectionCloseFrame:

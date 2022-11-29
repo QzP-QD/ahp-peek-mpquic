@@ -20,35 +20,9 @@ import (
 	"time"
 )
 
+//var PORT string = "1234"
+
 const dimension = 6
-
-type Teststatic struct {
-	username string
-}
-
-var t *Teststatic
-
-func init() {
-	t = new(Teststatic)
-}
-
-//方便链式操作
-func WithConfig() *Teststatic {
-	return t.WithConfig()
-}
-func (c *Teststatic) WithConfig() *Teststatic {
-	return c
-}
-
-//写
-func (c *Teststatic) SetConfig(name string) {
-	c.username = name
-}
-
-//读
-func (c *Teststatic) GetConfig() string {
-	return c.username
-}
 
 type PeekID uint8
 
@@ -62,7 +36,7 @@ type PeekEvent struct {
 	PacketNumber protocol.PacketNumber
 	decideTime   time.Time
 	PacketLength protocol.ByteCount
-	state        [dimension]float64
+	feature      [dimension]float64
 	Tref         int64
 }
 
@@ -72,12 +46,12 @@ func PeekNewMemory() *PeekMemory {
 	}
 }
 
-func PeekNewEvent(pathID protocol.PathID, peekID PeekID, packetnumber protocol.PacketNumber, state [dimension]float64, pktlen protocol.ByteCount, Tref int64, decideTime time.Time) *PeekEvent {
+func PeekNewEvent(pathID protocol.PathID, peekID PeekID, packetnumber protocol.PacketNumber, feature [dimension]float64, pktlen protocol.ByteCount, Tref int64, decideTime time.Time) *PeekEvent {
 	return &PeekEvent{
 		PathID:       pathID,
 		peekID:       peekID,
 		PacketNumber: packetnumber,
-		state:        state,
+		feature:      feature,
 		Tref:         Tref,
 		decideTime:   decideTime,
 		PacketLength: pktlen,
@@ -92,21 +66,21 @@ type peekstrategy struct {
 	theta        *mat.Dense
 }
 
-var peek0 = &peekstrategy{
-	peekID:       0,
-	strategyname: "tx", // minRTT：在当前minRTT路径传输
-}
-
-var peek1 = &peekstrategy{
-	peekID:       1,
-	strategyname: "wt", // 等待快速路径
-}
+//var peek0 = &peekstrategy{
+//	peekID:       0,
+//	strategyname: "tx", // minRTT：在当前minRTT路径传输
+//}
+//
+//var peek1 = &peekstrategy{
+//	peekID:       1,
+//	strategyname: "wt", // 等待快速路径
+//}
 
 const recordNum = 2000
 
 // 记录阶段的执行次数统计
-var recordnumtx = recordNum
-var recordnumwt = recordNum
+//var recordnumtx = recordNum
+//var recordnumwt = recordNum
 
 // state代表目前的状态
 const initstate = "initstate"
@@ -115,29 +89,31 @@ const recordwt = "recordwt"
 const learning = "learning"
 const deployment = "deployment"
 
-var state string = initstate
+//var state string = initstate
 
-const txpath string = "/home/mininet/peekaboo/output/outputtx.txt"
-const wtpath string = "/home/mininet/peekaboo/output/outputwt.txt"
-const inputpath string = "/home/mininet/peekaboo/input/input.txt"
-const deployedtx string = "/home/mininet/peekaboo/output/deployedtx.txt"
-const deployedwt string = "/home/mininet/peekaboo/output/deployedwt.txt"
-const deployedtxbak string = "/home/mininet/peekaboo/output/deployedtxbak.txt"
-const deployedwtbak string = "/home/mininet/peekaboo/output/deployedwtbak.txt"
-const checkqpth string = "/home/mininet/peekaboo/input/checkq.txt"
+//var txpath string = "/home/mininet/peekaboo/output/outputtx.txt"
+//var wtpath string = "/home/mininet/peekaboo/output/outputwt.txt"
+//var inputpath string = "/home/mininet/peekaboo/input/input.txt"
+//var deployedtx string = "/home/mininet/peekaboo/output/deployedtx.txt"
+//var deployedwt string = "/home/mininet/peekaboo/output/deployedwt.txt"
+//var deployedtxbak string = "/home/mininet/peekaboo/output/deployedtxbak.txt"
+//var deployedwtbak string = "/home/mininet/peekaboo/output/deployedwtbak.txt"
+//var checkqpth string = "/home/mininet/peekaboo/input/checkq.txt"
 
 var flagfile string = "/home/mininet/peekaboo/flag1"
 
 const pathinfo string = "/home/mininet/peekaboo/pathinfo.txt"
 
-const cleaninputpath string = "/home/mininet/peekaboo/shellscript/input.sh"
-const cleancheckqpth string = "/home/mininet/peekaboo/shellscript/checkq.sh"
+//const cleaninputpath string = "/home/mininet/peekaboo/shellscript/input.sh"
+//const cleancheckqpth string = "/home/mininet/peekaboo/shellscript/checkq.sh"
+//
+//const cleantxpath string = "/home/mininet/peekaboo/shellscript/outputtx.sh"
+//const cleanwtpath string = "/home/mininet/peekaboo/shellscript/outputwt.sh"
+//
+//const cleandeployedtx string = "/home/mininet/peekaboo/shellscript/deployedtx.sh"
+//const cleandeployedwt string = "/home/mininet/peekaboo/shellscript/deployedwt.sh"
 
-const cleantxpath string = "/home/mininet/peekaboo/shellscript/outputtx.sh"
-const cleanwtpath string = "/home/mininet/peekaboo/shellscript/outputwt.sh"
-
-const cleandeployedtx string = "/home/mininet/peekaboo/shellscript/deployedtx.sh"
-const cleandeployedwt string = "/home/mininet/peekaboo/shellscript/deployedwt.sh"
+const clear string = "/home/mininet/peekaboo/shellscript/clear.sh"
 
 var featureCache [dimension]float64
 var TrefCache int64
@@ -147,19 +123,19 @@ const tx = "tx"
 const normal = "normal"
 
 var mediaparams = map[string]float64{
-	"rtt":  47.955748,
-	"loss": 11.4959,
-	"bth":  40.5483,
+	"rtt":  0.47955748 * 100,
+	"loss": 0.114959 * 100,
+	"bth":  0.405483 * 100,
 }
 var sessparams = map[string]float64{
-	"rtt":  47.9557,
-	"loss": 40.5483,
-	"bth":  11.4959,
+	"rtt":  0.479557 * 100,
+	"loss": 0.405483 * 100,
+	"bth":  0.114959 * 100,
 }
 var backparams = map[string]float64{
-	"rtt":  11.4959,
-	"loss": 47.9557,
-	"bth":  40.5484,
+	"rtt":  0.114959,
+	"loss": 0.479557,
+	"bth":  0.405484,
 }
 
 //var videoparams map[string]float64
@@ -171,6 +147,17 @@ type wtcache struct {
 	decideTime time.Time
 	Tref       int64
 }
+
+//TODO:各session共享链路状态
+var addrbths = map[string]float64{}
+var addrlosses = map[string]float64{}
+var addrrtts = map[string]float64{}
+
+var addrbthscores = map[string]float64{}
+var addrlossscores = map[string]float64{}
+var addrrttscores = map[string]float64{}
+
+var AddrSessionInP = map[string]map[protocol.ConnectionID]protocol.ByteCount{}
 
 func WtNewCache(feature [dimension]float64, Tref int64) *wtcache {
 	return &wtcache{
@@ -188,36 +175,44 @@ var wtcaches deque.Deque = deque.Deque{}
 	flag: 当前做的决策（tx，wt，normal）
 */
 func (sch *scheduler) selectPeekaboo(s *session, hasRetransmission bool, hasStreamRetransmission bool, fromPth *path) (*path, string) {
+	//fmt.Println(sch.port)
+
 	var selectedpath *path
 	var flag string = normal
-	if state == initstate {
+	if sch.state == initstate {
 		fmt.Println("Init Peek>>>>")
-		// 创建新的输出文件
-		var f *os.File
-		f, _ = os.Create(txpath)
-		f.Close()
-
-		f, _ = os.Create(wtpath)
-		f.Close()
-
-		f, _ = os.Create(deployedtx)
-		f.Close()
-
-		f, _ = os.Create(deployedwt)
-		f.Close()
-
-		f, _ = os.Create(deployedtxbak)
-		f.Close()
-		f, _ = os.Create(deployedwtbak)
-		f.Close()
-		f, _ = os.Create(checkqpth)
-		f.Close()
+		//// 创建新的输出文件
+		//var f *os.File
+		//f, _ = os.Create(txpath)
+		//f.Close()
+		//
+		//f, _ = os.Create(wtpath)
+		//f.Close()
+		//
+		//f, _ = os.Create(deployedtx)
+		//f.Close()
+		//
+		//f, _ = os.Create(deployedwt)
+		//f.Close()
+		//
+		//f, _ = os.Create(deployedtxbak)
+		//f.Close()
+		//f, _ = os.Create(deployedwtbak)
+		//f.Close()
+		//f, _ = os.Create(checkqpth)
+		//f.Close()
 
 		// 状态置为 recordtx
-		state = recordwt
+		sch.state = recordwt
 	}
 	// TODO:筛选路径
-	bestPath, secondPath := sch.selectPathAHP(s, hasRetransmission, hasStreamRetransmission, fromPth)
+	var bestPath, secondPath *path
+
+	if sch.SchedulerName == "linucb" {
+		bestPath, secondPath = sch.selectPathPeeka(s, hasRetransmission, hasStreamRetransmission, fromPth)
+	} else if sch.SchedulerName == "peek" {
+		bestPath, secondPath = sch.selectPathAHP(s, hasRetransmission, hasStreamRetransmission, fromPth)
+	}
 
 	// 当最快路径不存在时的判断逻辑
 	if bestPath == nil {
@@ -290,31 +285,31 @@ func (sch *scheduler) selectPeekaboo(s *session, hasRetransmission bool, hasStre
 	}
 	TrefCache = Tref
 
-	if state == recordwt {
+	if sch.state == recordwt {
 		//	执行wt策略，记录到wtcaches中
 		selectedpath = nil
 		flag = wt
-	} else if state == recordtx {
+	} else if sch.state == recordtx {
 		// 执行tx策略
 		selectedpath = secondPath
 		flag = tx
-	} else if state == learning {
+	} else if sch.state == learning {
 		// 离线学习中，没有其他选择，直接在secondPath上传输
 		selectedpath = secondPath
-	} else if state == deployment {
+	} else if sch.state == deployment {
 		// 部署之后的，peekaboo决策逻辑
 		xArray := mat.NewDense(dimension, 1, nil)
 		for i := 0; i < dimension; i++ {
 			xArray.Set(i, 0, feature[i])
 		}
 		ucb0 := mat.NewDense(1, 1, nil)
-		ucb0.Product(peek0.theta.T(), xArray)
+		ucb0.Product(sch.peek0.theta.T(), xArray)
 
 		ucb1 := mat.NewDense(1, 1, nil)
-		ucb1.Product(peek1.theta.T(), xArray)
+		ucb1.Product(sch.peek1.theta.T(), xArray)
 
 		if ucb0.At(0, 0) > ucb1.At(0, 0) {
-			if rand.Intn(100) < int(peek0.pdeploy*100) {
+			if rand.Intn(100) < int(sch.peek0.pdeploy*100) {
 				selectedpath = secondPath
 				// 采用tx策略
 				flag = tx
@@ -324,7 +319,7 @@ func (sch *scheduler) selectPeekaboo(s *session, hasRetransmission bool, hasStre
 				flag = wt
 			}
 		} else {
-			if rand.Intn(100) < int(peek1.pdeploy*100) {
+			if rand.Intn(100) < int(sch.peek1.pdeploy*100) {
 				selectedpath = nil
 				//采用wt策略
 				flag = wt
@@ -348,116 +343,118 @@ func (sch *scheduler) selectPeekaboo(s *session, hasRetransmission bool, hasStre
 }
 
 // TODO: 后台监控 q差值 的线程
-func monitorThread() {
+func (sch *scheduler) monitorThread() {
 	// 只在 deployment阶段进行判定，若不处于deployment阶段，则表示正在重新采集数据进行训练，不需要再评估分数
 	time.Sleep(time.Duration(6) * time.Second)
 
-	for state == deployment {
+	for sch.state == deployment {
 		// 将数据备份，python的读和golang的写同时进行导致err
-		input, err := ioutil.ReadFile(deployedtx)
+		input, err := ioutil.ReadFile(sch.deployedtx)
 		if err != nil {
-			panic(err)
+			panic(any(err))
 		}
-		f1, _ := os.Create(deployedtxbak)
+		f1, _ := os.Create(sch.deployedtxbak)
 		f1.Close()
-		f2, _ := os.Create(deployedwtbak)
+		f2, _ := os.Create(sch.deployedwtbak)
 		f2.Close()
 
-		err = ioutil.WriteFile(deployedtxbak, input, 0644)
+		err = ioutil.WriteFile(sch.deployedtxbak, input, 0644)
 		if err != nil {
-			panic(err)
+			panic(any(err))
 		}
 		// cat /dev/null > file_name
-		removefile := exec.Command("bash", cleandeployedtx)
+		removefile := exec.Command("bash", clear, sch.deployedtx)
 		err = removefile.Run()
 		if err != nil {
-			panic(err)
+			panic(any(err))
 		}
 
-		input, err = ioutil.ReadFile(deployedwt)
+		input, err = ioutil.ReadFile(sch.deployedwt)
 		if err != nil {
-			panic(err)
+			panic(any(err))
 		}
 
-		err = ioutil.WriteFile(deployedwtbak, input, 0644)
+		err = ioutil.WriteFile(sch.deployedwtbak, input, 0644)
 		if err != nil {
-			panic(err)
+			panic(any(err))
 		}
 
-		removefile = exec.Command("bash", cleandeployedwt)
+		removefile = exec.Command("bash", clear, sch.deployedwt)
 		err = removefile.Run()
 		if err != nil {
-			panic(err)
+			panic(any(err))
 		}
 
 		//执行python脚本，从脚本获取返回值标识当前的q是否超限
-		args := []string{"/home/mininet/peekaboo/evaluateqdeploy.py", strconv.FormatFloat(peek0.qdeploy, 'f', 5, 64), strconv.FormatFloat(peek1.qdeploy, 'f', 5, 64)}
+		args := []string{"/home/mininet/peekaboo/evaluateqdeploy.py", strconv.FormatFloat(sch.peek0.qdeploy, 'f', 5, 64), strconv.FormatFloat(sch.peek1.qdeploy, 'f', 5, 64), sch.port}
 		_, err = exec.Command("python", args...).Output()
 		if err != nil {
-			panic(err)
+			panic(any(err))
 		}
-		content, err1 := os.ReadFile(checkqpth)
+		content, err1 := os.ReadFile(sch.checkqpth)
 		if err1 != nil {
-			panic(err)
+			panic(any(err))
 		}
 
-		err = os.Remove(deployedwtbak)
-		err = os.Remove(deployedtxbak)
+		err = os.Remove(sch.deployedwtbak)
+		err = os.Remove(sch.deployedtxbak)
 
 		qflag, _ := strconv.ParseFloat(string(content), 64)
 
-		removefile = exec.Command("bash", cleancheckqpth)
+		removefile = exec.Command("bash", clear, sch.checkqpth)
 		err = removefile.Run()
 		if err != nil {
-			panic(err)
+			panic(any(err))
 		}
 
 		if qflag == -1 {
 			// 需要重新训练
 			fmt.Println("Need to retrain Peekaboo!")
-			state = initstate
+			sch.state = initstate
 			break
 		} else {
 			time.Sleep(time.Duration(1) * time.Second)
 		}
 	}
 
-	removefile := exec.Command("bash", cleantxpath)
+	removefile := exec.Command("bash", clear, sch.txpath)
 	err := removefile.Run()
 	if err != nil {
-		panic(err)
+		panic(any(err))
 	}
 
-	removefile = exec.Command("bash", cleanwtpath)
+	removefile = exec.Command("bash", clear, sch.wtpath)
 	err = removefile.Run()
 	if err != nil {
-		panic(err)
+		panic(any(err))
 	}
 
-	removefile = exec.Command("bash", cleaninputpath)
+	removefile = exec.Command("bash", clear, sch.inputpath)
 	err = removefile.Run()
 	if err != nil {
-		panic(err)
+		panic(any(err))
 	}
 
 	fmt.Println("Stop Monitoring, Retrain Peek")
 }
 
 // 开始learning阶段；训练结果部署到当前peeka调度器上
-func offlineTrainPeek() {
+func (sch *scheduler) offlineTrainPeek() {
+	fmt.Println("---------------" + sch.port + " Start Learning--------------")
+
 	// 调用python脚本
-	args := []string{"/home/mininet/peekaboo/learningphase.py"}
+	args := []string{"/home/mininet/peekaboo/learningphase.py", sch.port}
 	_, err := exec.Command("python", args...).Output()
 	if err != nil {
-		panic(err)
+		panic(any(err))
 	}
 
-	fmt.Println("Learning Finised!")
+	fmt.Println("---------------Learning Finised!---------------")
 	// 读取文件内容
 	// input文件格式：peekID、feature[0-5]、p
 	var strtx string
 	var strwt string
-	f, err := os.Open(inputpath)
+	f, err := os.Open(sch.inputpath)
 	if err != nil {
 		panic(any(err))
 	}
@@ -481,32 +478,32 @@ func offlineTrainPeek() {
 		}
 	}
 
-	peek0.theta = mat.NewDense(dimension, 1, nil)
-	peek1.theta = mat.NewDense(dimension, 1, nil)
+	sch.peek0.theta = mat.NewDense(dimension, 1, nil)
+	sch.peek1.theta = mat.NewDense(dimension, 1, nil)
 	strtxarray := strings.Split(strtx, ",")
 	strwtarray := strings.Split(strwt, ",")
 	for i := 1; i <= 6; i++ {
 		tmp0, _ := strconv.ParseFloat(strtxarray[i], 64)
 		tmp1, _ := strconv.ParseFloat(strwtarray[i], 64)
 
-		peek0.theta.Set(i-1, 0, tmp0)
-		peek1.theta.Set(i-1, 0, tmp1)
+		sch.peek0.theta.Set(i-1, 0, tmp0)
+		sch.peek1.theta.Set(i-1, 0, tmp1)
 	}
 
-	peek0.pdeploy, _ = strconv.ParseFloat(strtxarray[7], 64)
-	peek1.pdeploy, _ = strconv.ParseFloat(strwtarray[7], 64)
+	sch.peek0.pdeploy, _ = strconv.ParseFloat(strtxarray[7], 64)
+	sch.peek1.pdeploy, _ = strconv.ParseFloat(strwtarray[7], 64)
 
-	peek0.qdeploy, _ = strconv.ParseFloat(strtxarray[8], 64)
-	peek1.qdeploy, _ = strconv.ParseFloat(strwtarray[8], 64)
+	sch.peek0.qdeploy, _ = strconv.ParseFloat(strtxarray[8], 64)
+	sch.peek1.qdeploy, _ = strconv.ParseFloat(strwtarray[8], 64)
 
-	fmt.Println("peek0's Q-deploy ", peek0.qdeploy)
-	fmt.Println("peek1's Q-deploy ", peek1.qdeploy)
+	fmt.Println("peek0's Q-deploy ", sch.peek0.qdeploy)
+	fmt.Println("peek1's Q-deploy ", sch.peek1.qdeploy)
 
-	state = deployment
+	sch.state = deployment
 
 	//	TODO：开启监控
 	fmt.Println("Start Monitoring......")
-	go monitorThread()
+	go sch.monitorThread()
 }
 
 // 获取最快和第二快路径
@@ -607,18 +604,16 @@ func (a SortBy) Less(i, j int) bool {
 func (sch *scheduler) selectPathAHP(s *session, hasRetransmission bool, hasStreamRetransmission bool, fromPth *path) (*path, *path) {
 	_, err := os.Stat(flagfile)
 
-	// 版本号太小，读取最新的链路状态
+	// 链路状态文件更新，读取最新的链路状态
 	if err == nil || os.IsExist(err) {
-		////同步版本号
-		//sch.pathversion = version
 		os.Remove(flagfile)
-
-		fmt.Println("update pth status")
+		fmt.Println("--Update Path Status--")
 		infofile, err1 := os.Open(pathinfo)
 		if err1 != nil {
 			panic(any(err1))
 		}
 		defer infofile.Close()
+
 		reader := bufio.NewReader(infofile)
 		for {
 			str, err2 := reader.ReadString('\n')
@@ -635,33 +630,36 @@ func (sch *scheduler) selectPathAHP(s *session, hasRetransmission bool, hasStrea
 			bthstr := strings.Replace(stringSlice[2], "\n", "", -1)
 			bth, _ := strconv.ParseFloat(bthstr, 64)
 
-			s.paths[s.addrs[ip]].loss = loss
-			s.paths[s.addrs[ip]].bth = bth
+			rttstr := strings.Replace(stringSlice[3], "\n", "", -1)
+			rtt, _ := strconv.ParseFloat(rttstr, 64)
 
+			addrbths[ip] = bth
+			addrlosses[ip] = loss
+			addrrtts[ip] = rtt
 		}
 
-		//更新各个链路的loss得分
-		for _, pathID := range s.addrs {
-			pth := s.paths[pathID]
+		//更新链路loss得分
+		for ip1, _ := range s.addrs {
 			totallossrate := float64(0)
-
-			for _, pathID1 := range s.addrs {
-				tmppth := s.paths[pathID1]
-				totallossrate = totallossrate + pth.loss/tmppth.loss
+			for ip2, _ := range s.addrs {
+				totallossrate = totallossrate + addrlosses[ip1]/addrlosses[ip2]
 			}
-			pth.lossscore = 1 / totallossrate
+			addrlosses[ip1] = 1 / totallossrate
 		}
-		//sch.pathversion += 1
-		//index指针归零
-		sch.countindex = 0
 	}
+
+	//TODO:每次发送都更新“链路的InP”大小
+	for _, pth := range s.paths {
+		AddrSessionInP[pth.ip][s.connectionID] = pth.sentPacketHandler.GetBytesInFlight()
+	}
+
 	//计算链路的bth得分
-	for _, pathID := range s.addrs {
+	for ip1, pathID := range s.addrs {
 		pth := s.paths[pathID]
 		totalbthrate := float64(0)
 
 		pthbth1 := (pth.bth*1024*1024/8)*pth.rttStats.LatestRTT().Seconds() - (float64(pth.sentPacketHandler.GetBytesInFlight()))
-		for _, pathID1 := range s.addrs {
+		for ip2, pathID1 := range s.addrs {
 			tmppth := s.paths[pathID1]
 			pthbth2 := (tmppth.bth*1024*1024/8)*tmppth.rttStats.LatestRTT().Seconds() - (float64(tmppth.sentPacketHandler.GetBytesInFlight()))
 			totalbthrate = totalbthrate + pthbth2/pthbth1
@@ -670,6 +668,7 @@ func (sch *scheduler) selectPathAHP(s *session, hasRetransmission bool, hasStrea
 		pth.bthscore = 1 / totalbthrate
 	}
 
+	//TODO:每次发送都更新可用RTT得分
 	//计算链路的rtt得分
 	for _, pathID := range s.addrs {
 		pth := s.paths[pathID]
@@ -700,6 +699,8 @@ func (sch *scheduler) selectPathAHP(s *session, hasRetransmission bool, hasStrea
 	var pthlist []*path
 pathLoop:
 	for pathID, pth := range s.paths {
+		//fmt.Println(pth.bth, pth.loss, pth.rttStats.SmoothedRTT().Milliseconds())
+
 		if pth.potentiallyFailed.Get() {
 			continue pathLoop
 		}
@@ -712,27 +713,32 @@ pathLoop:
 		pth.curscore = pth.rttscore*params["rtt"] + pth.lossscore*params["loss"] + (pth.bthscore)*params["bth"]
 		pthlist = append(pthlist, pth)
 	}
-	if len(pthlist) == 0 {
+	if len(pthlist) <= 1 {
 		//fmt.Println("shit")
 		return s.paths[0], nil
 	}
 	//TODO: 将选择的路径错开
 	sort.Sort(SortBy(pthlist))
-	//var mysize = int64(len(pthlist))
-	//var curindex = sch.countindex % mysize
-	pth1 := pthlist[0]
+
+	var pth1 *path = nil
 	var pth2 *path = nil
 	if len(pthlist) > 1 {
+		pth1flag := false
 		for _, pth := range pthlist {
-			//if id != 0 && pth != pth1 && pth.SendingAllowed() {
+			if pth.pathID == protocol.InitialPathID {
+				continue
+			}
+			if !pth1flag {
+				pth1 = pth
+				pth1flag = true
+				continue
+			}
 			if pth.SendingAllowed() {
 				pth2 = pth
 				break
 			}
 		}
 	}
-
-	sch.countindex = sch.countindex + 1
 
 	return pth1, pth2
 }
@@ -791,8 +797,6 @@ func (sch *scheduler) selectPathAHPnew(s *session, hasRetransmission bool, hasSt
 			pth.bthscore = 1 / totalbthrate
 			pth.rttscore = 1 / totalrttrate
 		}
-
-		sch.countindex = 0
 	}
 
 	//根据业务类型代入算式计算得分
@@ -826,8 +830,6 @@ pathLoop:
 	}
 	//TODO: 将选择的路径错开
 	sort.Sort(SortBy(pthlist))
-	//var mysize = int64(len(pthlist))
-	//var curindex = sch.countindex % mysize
 	pth1 := pthlist[0]
 	var pth2 *path = nil
 	if len(pthlist) > 1 {
@@ -839,8 +841,6 @@ pathLoop:
 			}
 		}
 	}
-
-	sch.countindex = sch.countindex + 1
 
 	return pth1, pth2
 }
@@ -875,11 +875,9 @@ func (sch *scheduler) selectPathAHPonly(s *session, hasRetransmission bool, hasS
 
 			bthstr := strings.Replace(stringSlice[2], "\n", "", -1)
 			bth, _ := strconv.ParseFloat(bthstr, 64)
-			//fmt.Println(bth)
 
 			s.paths[s.addrs[ip]].loss = loss
 			s.paths[s.addrs[ip]].bth = bth
-
 		}
 
 		//更新各个链路的loss得分
@@ -894,8 +892,6 @@ func (sch *scheduler) selectPathAHPonly(s *session, hasRetransmission bool, hasS
 			pth.lossscore = 1 / totallossrate
 		}
 		//sch.pathversion += 1
-		//index指针归零
-		sch.countindex = 0
 	}
 	//计算链路的bth得分
 	for _, pathID := range s.addrs {
@@ -942,6 +938,8 @@ func (sch *scheduler) selectPathAHPonly(s *session, hasRetransmission bool, hasS
 	var pthlist []*path
 pathLoop:
 	for pathID, pth := range s.paths {
+		//fmt.Println(pth.bth, pth.loss, pth.rttStats.SmoothedRTT().Milliseconds())
+
 		if pth.potentiallyFailed.Get() {
 			continue pathLoop
 		}
@@ -954,16 +952,24 @@ pathLoop:
 		pth.curscore = pth.rttscore*params["rtt"] + pth.lossscore*params["loss"] + (pth.bthscore)*params["bth"]
 		pthlist = append(pthlist, pth)
 	}
-	if len(pthlist) == 0 {
+	if len(pthlist) <= 1 {
 		//fmt.Println("shit")
-		return s.paths[0]
+		return s.paths[protocol.InitialPathID]
 	}
-
+	//TODO: 将选择的路径错开
 	sort.Sort(SortBy(pthlist))
 
-	pth1 := pthlist[0]
+	var pth1 *path = nil
 
-	sch.countindex = sch.countindex + 1
+	for _, pth := range pthlist {
+		if pth.pathID == protocol.InitialPathID {
+			continue
+		}
+		if pth.SendingAllowed() {
+			pth1 = pth
+			break
+		}
+	}
 
 	return pth1
 }
@@ -975,22 +981,22 @@ func (sch *scheduler) storePeekAction(s *session, pathID protocol.PathID, pkt *a
 		sch.peekmemories[pathID] = PeekNewMemory()
 	}
 	if flag == tx {
-		state := featureCache
-		event := PeekNewEvent(pathID, 0, packetNumber, state, pkt.Length, TrefCache, time.Now())
+		feature := featureCache
+		event := PeekNewEvent(pathID, 0, packetNumber, feature, pkt.Length, TrefCache, time.Now())
 
 		sch.peekmemories[pathID].PushBack(event)
 	}
 
 	// 将wt决策的缓存也记录到memory中
 	for {
-		if wtcaches.Len() == 0 {
+		if wtcaches.Len() == 0 || wtcaches.Front() == nil {
 			break
 		}
 		var Frontdata = wtcaches.Front().(*wtcache)
 		wtcaches.PopFront()
-		state := Frontdata.feature
+		feature := Frontdata.feature
 		// 虽然wt决策没有选择路径进行传输，暂时设置为与当前相同的发送路径和数据包
-		event := PeekNewEvent(pathID, 1, packetNumber, state, pkt.Length, Frontdata.Tref, Frontdata.decideTime)
+		event := PeekNewEvent(pathID, 1, packetNumber, feature, pkt.Length, Frontdata.Tref, Frontdata.decideTime)
 		sch.peekmemories[pathID].PushBack(event)
 	}
 }
@@ -1014,13 +1020,13 @@ func (sch *scheduler) receivedACKForPeeka(s *session, ackFrame *wire.AckFrame) {
 	var filemap map[PeekID]*os.File
 	filemap = make(map[PeekID]*os.File)
 	var err error
-	filemap[0], err = os.OpenFile(txpath, os.O_WRONLY|os.O_APPEND, 0600)
+	filemap[0], err = os.OpenFile(sch.txpath, os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		panic(any(err))
 	}
 	// 会不会多线程出问题？
 	defer filemap[0].Close()
-	filemap[1], err = os.OpenFile(wtpath, os.O_WRONLY|os.O_APPEND, 0600)
+	filemap[1], err = os.OpenFile(sch.wtpath, os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		panic(any(err))
 	}
@@ -1034,13 +1040,13 @@ func (sch *scheduler) receivedACKForPeeka(s *session, ackFrame *wire.AckFrame) {
 	var deployfile map[PeekID]*os.File
 	deployfile = make(map[PeekID]*os.File)
 
-	deployfile[0], err = os.OpenFile(deployedtx, os.O_WRONLY|os.O_APPEND, 0600)
+	deployfile[0], err = os.OpenFile(sch.deployedtx, os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		panic(any(err))
 	}
 	defer deployfile[0].Close()
 
-	deployfile[1], err = os.OpenFile(deployedwt, os.O_WRONLY|os.O_APPEND, 0600)
+	deployfile[1], err = os.OpenFile(sch.deployedwt, os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		panic(any(err))
 	}
@@ -1074,7 +1080,7 @@ func (sch *scheduler) receivedACKForPeeka(s *session, ackFrame *wire.AckFrame) {
 		var peekid = FrontData.peekID
 		var slice []string
 		slice = append(slice, strconv.FormatInt(int64(peekid), 10))
-		for _, num := range FrontData.state {
+		for _, num := range FrontData.feature {
 			slice = append(slice, strconv.FormatFloat(num, 'f', 5, 64))
 		}
 		slice = append(slice, strconv.FormatInt(FrontData.Tref, 10))
@@ -1085,36 +1091,39 @@ func (sch *scheduler) receivedACKForPeeka(s *session, ackFrame *wire.AckFrame) {
 		outputstr += "\n" // 换行符
 
 		//FIXME：对于不同state下的记录逻辑，如learning阶段也需要进行记录决策历史以实现q值的更新比较
-		if state == recordwt {
+		if sch.state == recordwt {
 			writermap[peekid].WriteString(outputstr)
 			writermap[peekid].Flush()
 
-			recordnumwt--
-			if recordnumwt <= 0 {
+			sch.recordnumwt--
+			if sch.recordnumwt <= 0 {
 				fmt.Println("Start recording tx")
-				state = recordtx
+				sch.state = recordtx
 			}
-		} else if state == recordtx {
+		} else if sch.state == recordtx {
 			writermap[peekid].WriteString(outputstr)
 			writermap[peekid].Flush()
 
-			recordnumtx--
-			if recordnumtx <= 0 {
-				state = learning
+			sch.recordnumtx--
+			if sch.recordnumtx <= 0 {
+				sch.state = learning
 
-				recordnumwt = recordNum / 2
-				recordnumtx = recordNum / 2
+				sch.recordnumwt = recordNum / 2
+				sch.recordnumtx = recordNum / 2
 				fmt.Println("Start Training!!!!")
-				go offlineTrainPeek()
+				go sch.offlineTrainPeek()
 				fmt.Println("Training Peekaboo Finished! Deploy!")
 			}
-		} else if state == learning {
+		} else if sch.state == learning {
 			// 在learning和deployment阶段，将数据存储到不同的路径下
 			deploywriter[peekid].WriteString(outputstr)
 			deploywriter[peekid].Flush()
-		} else if state == deployment {
+		} else if sch.state == deployment {
 			deploywriter[peekid].WriteString(outputstr)
 			deploywriter[peekid].Flush()
 		}
 	}
 }
+
+//TODO: 把逻辑写成sch私有
+//TODO：链路状态共享

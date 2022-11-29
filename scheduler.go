@@ -1,11 +1,12 @@
 package quic
 
 import (
-	"bufio"
-	"strings"
+	//"bufio"
+	//"strings"
 
 	//"bufio"
 	"fmt"
+	"github.com/gammazero/deque"
 	"github.com/lucas-clemente/quic-go/ackhandler"
 	"github.com/lucas-clemente/quic-go/internal/protocol"
 	"github.com/lucas-clemente/quic-go/internal/utils"
@@ -37,59 +38,126 @@ type scheduler struct {
 	TrainingAgent agents.TrainingAgent
 	// Normal Agent
 	Agent agents.Agent
-    
+
 	// Cached state for training
-	cachedState		types.Vector
-	cachedPathID	protocol.PathID
+	cachedState  types.Vector
+	cachedPathID protocol.PathID
 
 	AllowedCongestion int
 
 	// async updated reward
-	record	uint64
+	record        uint64
 	episoderecord uint64
-	statevector [6000]types.Vector
-	packetvector [6000]uint64
+	statevector   [6000]types.Vector
+	packetvector  [6000]uint64
 	//rewardvector [6000]types.Output
-	actionvector [6000]int
+	actionvector   [6000]int
 	recordDuration [6000]types.Output
-	lastfiretime time.Time
-	zz [6000]time.Time
-	waiting    uint64
+	lastfiretime   time.Time
+	zz             [6000]time.Time
+	waiting        uint64
 
 	// linUCB
-	fe uint64
-	se uint64
-	MAaF [banditDimension][banditDimension]float64
-	MAaS [banditDimension][banditDimension]float64
-  MbaF [banditDimension]float64
-	MbaS [banditDimension]float64
-	featureone [6000]float64
-	featuretwo [6000]float64
+	fe           uint64
+	se           uint64
+	MAaF         [banditDimension][banditDimension]float64
+	MAaS         [banditDimension][banditDimension]float64
+	MbaF         [banditDimension]float64
+	MbaS         [banditDimension]float64
+	featureone   [6000]float64
+	featuretwo   [6000]float64
 	featurethree [6000]float64
-	featurefour [6000]float64
-	featurefive [6000]float64
-	featuresix [6000]float64
+	featurefour  [6000]float64
+	featurefive  [6000]float64
+	featuresix   [6000]float64
 	// Retrans cache
-	retrans				map[protocol.PathID] uint64
+	retrans map[protocol.PathID]uint64
 
 	// Write experiences
-	DumpExp				bool
-	DumpPath			string
-	dumpAgent			experienceAgent
+	DumpExp   bool
+	DumpPath  string
+	dumpAgent experienceAgent
 
 	// Reinforcement
-	rlmemories 			map[protocol.PathID]*RLMemory
-	nmBandwidth			*networkMonitor
+	rlmemories  map[protocol.PathID]*RLMemory
+	nmBandwidth *networkMonitor
 
 	//Peekaboo
-	peekmemories 		map[protocol.PathID]*PeekMemory
+	peekmemories map[protocol.PathID]*PeekMemory
 
-//	TODO:AHP算法的路径index错峰指针
-	countindex 			int64
+	port string
+
+	//	TODO:把变量改为scheduler对象私有
+	peek0 *peekstrategy
+	peek1 *peekstrategy
+
+	//记录阶段的执行次数统计
+	recordnumtx uint64
+	recordnumwt uint64
+
+	// state代表目前的状态
+	state string
+
+	txpath        string
+	wtpath        string
+	inputpath     string
+	deployedtx    string
+	deployedwt    string
+	deployedtxbak string
+	deployedwtbak string
+	checkqpth     string
+
+	featureCache [dimension]float64
+	TrefCache    uint64
+
+	wtcaches deque.Deque
 }
 
 func (sch *scheduler) setup() {
 	fmt.Println("Scheduler Setup!")
+
+	//TODO:把变量改为scheduler对象私有
+	sch.peek0 = &peekstrategy{
+		peekID:       0,
+		strategyname: "tx", // minRTT：在当前minRTT路径传输
+	}
+	sch.peek1 = &peekstrategy{
+		peekID:       1,
+		strategyname: "wt", // 等待快速路径
+	}
+
+	sch.recordnumtx = recordNum
+	sch.recordnumwt = recordNum
+
+	sch.state = initstate
+
+	sch.wtcaches = deque.Deque{}
+
+	sch.txpath = "/home/mininet/peekaboo/output/outputtx" + sch.port + ".txt"
+	sch.wtpath = "/home/mininet/peekaboo/output/outputwt" + sch.port + ".txt"
+	sch.inputpath = "/home/mininet/peekaboo/input/input" + sch.port + ".txt"
+	sch.deployedtx = "/home/mininet/peekaboo/output/deployedtx" + sch.port + ".txt"
+	sch.deployedwt = "/home/mininet/peekaboo/output/deployedwt" + sch.port + ".txt"
+	sch.deployedtxbak = "/home/mininet/peekaboo/output/deployedtxbak" + sch.port + ".txt"
+	sch.deployedwtbak = "/home/mininet/peekaboo/output/deployedwtbak" + sch.port + ".txt"
+	sch.checkqpth = "/home/mininet/peekaboo/input/checkq" + sch.port + ".txt"
+	var f *os.File
+	f, _ = os.Create(sch.txpath)
+	f.Close()
+	f, _ = os.Create(sch.wtpath)
+	f.Close()
+	f, _ = os.Create(sch.deployedtx)
+	f.Close()
+
+	f, _ = os.Create(sch.deployedwt)
+	f.Close()
+	f, _ = os.Create(sch.deployedtxbak)
+	f.Close()
+	f, _ = os.Create(sch.deployedwtbak)
+	f.Close()
+	f, _ = os.Create(sch.checkqpth)
+	f.Close()
+
 	//sch.pathversion = -1
 	sch.nmBandwidth = &networkMonitor{}
 	sch.nmBandwidth.setup(50)
@@ -104,7 +172,7 @@ func (sch *scheduler) setup() {
 	//Read lin to buffer
 	//file, err := os.Open("/home/mininet/output/lin")
 	//if err != nil {
-  // 	panic(err)
+	// 	panic(any(err))
 	//}
 
 	//for i := 0; i < banditDimension; i++ {
@@ -137,8 +205,6 @@ func (sch *scheduler) setup() {
 			sch.Agent = GetAgent("", "")
 		}
 	}
-
-	sch.countindex = 0
 }
 
 func (sch *scheduler) getRetransmission(s *session) (hasRetransmission bool, retransmitPacket *ackhandler.Packet, pth *path) {
@@ -243,6 +309,8 @@ pathLoop:
 		}
 	}
 
+	//fmt.Println(selectedPath.conn.RemoteAddr())
+	fmt.Println(s.connectionID)
 	return selectedPath
 }
 
@@ -285,16 +353,16 @@ func (sch *scheduler) selectPathLowLatency(s *session, hasRetransmission bool, h
 pathLoop:
 	for pathID, pth := range s.paths {
 		// Don't block path usage if we retransmit, even on another path
-		if !hasRetransmission && !pth.SendingAllowed() {
-			utils.Debugf("Discarding %d - no has ret and sending is not allowed ", pathID)
-			continue pathLoop
-		}
-
-		// If this path is potentially failed, do not consider it for sending
-		if pth.potentiallyFailed.Get() {
-			utils.Debugf("Discarding %d - potentially failed", pathID)
-			continue pathLoop
-		}
+		//if !hasRetransmission && !pth.SendingAllowed() {
+		//	utils.Debugf("Discarding %d - no has ret and sending is not allowed ", pathID)
+		//	continue pathLoop
+		//}
+		//
+		//// If this path is potentially failed, do not consider it for sending
+		//if pth.potentiallyFailed.Get() {
+		//	utils.Debugf("Discarding %d - potentially failed", pathID)
+		//	continue pathLoop
+		//}
 
 		// XXX Prevent using initial pathID if multiple paths
 		if pathID == protocol.InitialPathID {
@@ -437,10 +505,10 @@ pathLoop:
 	cwndBest := uint64(bestPath.sentPacketHandler.GetCongestionWindow())
 	FirstCo := uint64(protocol.DefaultTCPMSS) * uint64(secondLowerRTT) * (cwndBest*2*uint64(lowerRTT) + uint64(secondLowerRTT) - uint64(lowerRTT))
 	BSend, _ := s.flowControlManager.SendWindowSize(protocol.StreamID(sid))
-	SecondCo := 2 * 1 * uint64(lowerRTT) * uint64(lowerRTT) * (uint64(BSend) - (uint64(secondBestPath.sentPacketHandler.GetBytesInFlight())+uint64(protocol.DefaultTCPMSS)))
+	SecondCo := 2 * 1 * uint64(lowerRTT) * uint64(lowerRTT) * (uint64(BSend) - (uint64(secondBestPath.sentPacketHandler.GetBytesInFlight()) + uint64(protocol.DefaultTCPMSS)))
 
 	if FirstCo > SecondCo {
-		return nil		
+		return nil
 	} else {
 		return secondBestPath
 	}
@@ -568,17 +636,17 @@ pathLoop:
 
 	lhs := uint64(lowerRTT) * (xBest + cwndBest)
 	rhs := cwndBest * (uint64(secondLowerRTT) + delta)
-	if (lhs * 4) < ((rhs * 4) + sch.waiting*rhs){
+	if (lhs * 4) < ((rhs * 4) + sch.waiting*rhs) {
 		xSecond := queueSize
 		if queueSize < cwndSecond {
 			xSecond = cwndSecond
 		}
 		lhsSecond := uint64(secondLowerRTT) * xSecond
 		rhsSecond := cwndSecond * (2*uint64(lowerRTT) + delta)
-		if (lhsSecond > rhsSecond) {
-				sch.waiting = 1
-			    return nil
-		} 
+		if lhsSecond > rhsSecond {
+			sch.waiting = 1
+			return nil
+		}
 	} else {
 		sch.waiting = 0
 	}
@@ -667,7 +735,7 @@ pathLoop:
 		bestPathID = pathID
 
 	}
-	
+
 	//Get reward and Update Aa, ba
 	if bestPath != nil && secondBestPath != nil {
 		for sch.episoderecord < sch.record {
@@ -680,7 +748,7 @@ pathLoop:
 				cureNum = uint64(secondBestPath.sentPacketHandler.GetLeastUnacked() - 1)
 			}
 			if sch.packetvector[sch.episoderecord] <= cureNum {
-				curereward = float64(protocol.DefaultTCPMSS)/float64(time.Since(sch.zz[sch.episoderecord]))
+				curereward = float64(protocol.DefaultTCPMSS) / float64(time.Since(sch.zz[sch.episoderecord]))
 			} else {
 				break
 			}
@@ -752,13 +820,13 @@ pathLoop:
 	}
 
 	if bestPath == nil {
-	 	if secondBestPath != nil {
-	 		return secondBestPath
+		if secondBestPath != nil {
+			return secondBestPath
 		}
-		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission{
+		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission {
 			return s.paths[protocol.InitialPathID]
-	    }else{
-	  		return nil
+		} else {
+			return nil
 		}
 	}
 	if bestPath.SendingAllowed() {
@@ -766,10 +834,10 @@ pathLoop:
 		return bestPath
 	}
 	if secondBestPath == nil {
-		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission{
+		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission {
 			return s.paths[protocol.InitialPathID]
-	    }else{
-	  		return nil
+		} else {
+			return nil
 		}
 	}
 
@@ -829,7 +897,7 @@ pathLoop:
 			feature.Set(3, 0, 0)
 			feature.Set(5, 0, 0)
 		}
-		
+
 		//Buffer feature for latter update
 		sch.featureone[sch.record] = feature.At(0, 0)
 		sch.featuretwo[sch.record] = feature.At(1, 0)
@@ -876,7 +944,7 @@ pathLoop:
 			sch.waiting = 0
 			sch.zz[sch.record] = time.Now()
 			sch.actionvector[sch.record] = 1
-			sch.packetvector[sch.record] = secondBestPath.sentPacketHandler.GetLastPackets() + 1 
+			sch.packetvector[sch.record] = secondBestPath.sentPacketHandler.GetLastPackets() + 1
 			sch.record += 1
 			return secondBestPath
 		}
@@ -966,16 +1034,16 @@ pathLoop:
 		bestPath = pth
 		bestPathID = pathID
 
-	}	
-	
+	}
+
 	if bestPath == nil {
-	 	if secondBestPath != nil {
-	 		return secondBestPath
+		if secondBestPath != nil {
+			return secondBestPath
 		}
-		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission{
+		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission {
 			return s.paths[protocol.InitialPathID]
-	    }else{
-	  		return nil
+		} else {
+			return nil
 		}
 	}
 	if bestPath.SendingAllowed() {
@@ -983,10 +1051,10 @@ pathLoop:
 		return bestPath
 	}
 	if secondBestPath == nil {
-		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission{
+		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission {
 			return s.paths[protocol.InitialPathID]
-	    }else{
-	  		return nil
+		} else {
+			return nil
 		}
 	}
 
@@ -1046,7 +1114,7 @@ pathLoop:
 			feature.Set(3, 0, 0)
 			feature.Set(5, 0, 0)
 		}
-		
+
 		//Obtain theta
 		AaIF := mat.NewDense(banditDimension, banditDimension, nil)
 		AaIF.Inverse(AaF)
@@ -1073,7 +1141,7 @@ pathLoop:
 			} else {
 				sch.waiting = 0
 				return secondBestPath
-			}			
+			}
 		} else {
 			if rand.Intn(100) < 90 {
 				sch.waiting = 0
@@ -1081,7 +1149,7 @@ pathLoop:
 			} else {
 				sch.waiting = 1
 				return nil
-			}	
+			}
 		}
 	}
 
@@ -1097,12 +1165,12 @@ func (sch *scheduler) selectPathRandom(s *session, hasRetransmission bool, hasSt
 	}
 	var availablePaths []protocol.PathID
 
-	for pathID, pth := range s.paths{
-		cong := float32(pth.sentPacketHandler.GetCongestionWindow())-float32(pth.sentPacketHandler.GetBytesInFlight())
-		allowed := pth.SendingAllowed() || (cong <= 0 && float32(cong) >=  -float32(pth.sentPacketHandler.GetCongestionWindow()) * float32(sch.AllowedCongestion) * 0.01)
+	for pathID, pth := range s.paths {
+		cong := float32(pth.sentPacketHandler.GetCongestionWindow()) - float32(pth.sentPacketHandler.GetBytesInFlight())
+		allowed := pth.SendingAllowed() || (cong <= 0 && float32(cong) >= -float32(pth.sentPacketHandler.GetCongestionWindow())*float32(sch.AllowedCongestion)*0.01)
 
-		if pathID != protocol.InitialPathID && (allowed || hasRetransmission){
-		//if pathID != protocol.InitialPathID && (pth.SendingAllowed() || hasRetransmission){
+		if pathID != protocol.InitialPathID && (allowed || hasRetransmission) {
+			//if pathID != protocol.InitialPathID && (pth.SendingAllowed() || hasRetransmission){
 			availablePaths = append(availablePaths, pathID)
 		}
 	}
@@ -1116,7 +1184,7 @@ func (sch *scheduler) selectPathRandom(s *session, hasRetransmission bool, hasSt
 	return s.paths[availablePaths[pathID]]
 }
 
-func (sch *scheduler) selectFirstPath(s * session, hasRetransmission bool, hasStreamRetransmission bool, fromPth *path) *path {
+func (sch *scheduler) selectFirstPath(s *session, hasRetransmission bool, hasStreamRetransmission bool, fromPth *path) *path {
 	if len(s.paths) <= 1 {
 		if !hasRetransmission && !s.paths[protocol.InitialPathID].SendingAllowed() {
 			return nil
@@ -1124,7 +1192,7 @@ func (sch *scheduler) selectFirstPath(s * session, hasRetransmission bool, hasSt
 		return s.paths[protocol.InitialPathID]
 	}
 	for pathID, pth := range s.paths {
-		if pathID == protocol.PathID(1) && pth.SendingAllowed(){
+		if pathID == protocol.PathID(1) && pth.SendingAllowed() {
 			return pth
 		}
 	}
@@ -1141,30 +1209,30 @@ func (sch *scheduler) selectPathDQNAgent(s *session, hasRetransmission bool, has
 		return s.paths[protocol.InitialPathID]
 	}
 
-	if len(s.paths) == 2{
-		for pathID, path := range s.paths{
-			if pathID!=protocol.InitialPathID{
+	if len(s.paths) == 2 {
+		for pathID, path := range s.paths {
+			if pathID != protocol.InitialPathID {
 				utils.Debugf("Selecting path %d as unique path", pathID)
 				return path
 			}
 		}
 	}
-	
+
 	//Check for available paths
-	var availablePaths  []protocol.PathID
-	for pathID, path := range s.paths{
-		if path.sentPacketHandler.SendingAllowed() && pathID != protocol.InitialPathID{
+	var availablePaths []protocol.PathID
+	for pathID, path := range s.paths {
+		if path.sentPacketHandler.SendingAllowed() && pathID != protocol.InitialPathID {
 			availablePaths = append(availablePaths, pathID)
 		}
 	}
 
-	if len(availablePaths) == 0{
-		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission{
+	if len(availablePaths) == 0 {
+		if s.paths[protocol.InitialPathID].SendingAllowed() || hasRetransmission {
 			return s.paths[protocol.InitialPathID]
-		}else{
-	  	return nil
+		} else {
+			return nil
 		}
-	}else if len(availablePaths) == 1{
+	} else if len(availablePaths) == 1 {
 		return s.paths[availablePaths[0]]
 	}
 
@@ -1173,7 +1241,7 @@ func (sch *scheduler) selectPathDQNAgent(s *session, hasRetransmission bool, has
 	if paths == nil {
 		return s.paths[protocol.InitialPathID]
 	}
-	
+
 	return paths[action]
 }
 
@@ -1182,27 +1250,27 @@ func (sch *scheduler) selectPath(s *session, hasRetransmission bool, hasStreamRe
 	// XXX Currently round-robin
 	if sch.SchedulerName == "rtt" {
 		return sch.selectPathLowLatency(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "random"{
+	} else if sch.SchedulerName == "random" {
 		return sch.selectPathRandom(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "lowband"{
+	} else if sch.SchedulerName == "lowband" {
 		return sch.selectPathRandom(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "peek"{
+	} else if sch.SchedulerName == "peek" {
 		return sch.selectPathPeek(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "ecf"{
+	} else if sch.SchedulerName == "ecf" {
 		return sch.selectECF(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "blest"{
+	} else if sch.SchedulerName == "blest" {
 		return sch.selectBLEST(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "dqnAgent" {
+	} else if sch.SchedulerName == "dqnAgent" {
 		return sch.selectPathDQNAgent(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "primary" {
+	} else if sch.SchedulerName == "primary" {
 		return sch.selectFirstPath(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "rl" {
-			return sch.selectPathReinforcementLearning(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "rr"{
+	} else if sch.SchedulerName == "rl" {
+		return sch.selectPathReinforcementLearning(s, hasRetransmission, hasStreamRetransmission, fromPth)
+	} else if sch.SchedulerName == "rr" {
 		return sch.selectPathRoundRobin(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}else if sch.SchedulerName == "ahp"{
+	} else if sch.SchedulerName == "ahp" {
 		return sch.selectPathAHPonly(s, hasRetransmission, hasStreamRetransmission, fromPth)
-	}	else{
+	} else {
 		panic("unknown scheduler selected")
 		// Default, rtt
 		return sch.selectPathLowLatency(s, hasRetransmission, hasStreamRetransmission, fromPth)
@@ -1247,7 +1315,7 @@ func (sch *scheduler) performPacketSending(s *session, windowUpdateFrames []*wir
 					utils.Infof("Path %x: sent %d retrans %d lost %d; rcv %d rtt %v", pathID, sntPkts, sntRetrans, sntLost, rcvPkts, pth.rttStats.SmoothedRTT())
 					// TODO: Remove it
 					utils.Infof("Congestion Window: %d", pth.sentPacketHandler.GetCongestionWindow())
-					if sch.Training{
+					if sch.Training {
 						sRTT[pathID] = pth.rttStats.SmoothedRTT()
 					}
 				}
@@ -1256,18 +1324,18 @@ func (sch *scheduler) performPacketSending(s *session, windowUpdateFrames []*wir
 				utils.Infof("epsidoe: %d", sch.episoderecord)
 				utils.Infof("fe: %d", sch.fe)
 				utils.Infof("se: %d", sch.se)
-				if sch.Training && sch.SchedulerName == "dqnAgent"{
+				if sch.Training && sch.SchedulerName == "dqnAgent" {
 					duration := time.Since(s.sessionCreationTime)
 					var maxRTT time.Duration
-					for pathID := range sRTT{
-						if sRTT[pathID] > maxRTT{
+					for pathID := range sRTT {
+						if sRTT[pathID] > maxRTT {
 							maxRTT = sRTT[pathID]
 						}
 					}
 					sch.TrainingAgent.CloseEpisode(uint64(s.connectionID), RewardFinalGoodput(sch, s, duration, maxRTT), false)
 				}
 				utils.Infof("Dump: %t, Training:%t, scheduler:%s", sch.DumpExp, sch.Training, sch.SchedulerName)
-				if sch.DumpExp && !sch.Training && sch.SchedulerName == "dqnAgent"{
+				if sch.DumpExp && !sch.Training && sch.SchedulerName == "dqnAgent" {
 					utils.Infof("Closing episode %d", uint64(s.connectionID))
 					sch.dumpAgent.CloseExperience(uint64(s.connectionID))
 				}
@@ -1278,12 +1346,12 @@ func (sch *scheduler) performPacketSending(s *session, windowUpdateFrames []*wir
 				file2, _ := os.OpenFile("/home/mininet/output/lin", os.O_WRONLY, 0600)
 				for i := 0; i < banditDimension; i++ {
 					for j := 0; j < banditDimension; j++ {
-						fmt.Fprintf(file2, "%.8f\n", sch.MAaF[i][j])	
+						fmt.Fprintf(file2, "%.8f\n", sch.MAaF[i][j])
 					}
 				}
 				for i := 0; i < banditDimension; i++ {
 					for j := 0; j < banditDimension; j++ {
-						fmt.Fprintf(file2, "%.8f\n", sch.MAaS[i][j])	
+						fmt.Fprintf(file2, "%.8f\n", sch.MAaS[i][j])
 					}
 				}
 				for j := 0; j < banditDimension; j++ {
@@ -1376,16 +1444,16 @@ func (sch *scheduler) sendPacket(s *session) error {
 	}
 
 	//TODO: 记录每次的选路结果
-	var recordpath string
-	if sch.SchedulerName == "peek"{
-		recordpath = "/home/mininet/peekaboo/result/newnewnewres/pthrecord/recordpeek_"+s.missiontype +".csv"
-	}else{
-		recordpath = "/home/mininet/peekaboo/result/newnewnewres/pthrecord/record"+sch.SchedulerName +".csv"
-	}
-
-	file, _ := os.OpenFile(recordpath, os.O_WRONLY|os.O_APPEND,0600)
-	defer file.Close()
-	writer := bufio.NewWriter(file)
+	//var recordpath string
+	//if sch.SchedulerName == "peek"{
+	//	recordpath = "/home/mininet/peekaboo/result/newnewnewres/pthrecord/recordpeek_"+s.missiontype +".csv"
+	//}else{
+	//	recordpath = "/home/mininet/peekaboo/result/newnewnewres/pthrecord/record"+sch.SchedulerName +".csv"
+	//}
+	//
+	//file, _ := os.OpenFile(recordpath, os.O_WRONLY|os.O_APPEND,0600)
+	//defer file.Close()
+	//writer := bufio.NewWriter(file)
 
 	// Repeatedly try sending until we don't have any more data, or run out of the congestion window
 	for {
@@ -1398,9 +1466,9 @@ func (sch *scheduler) sendPacket(s *session) error {
 		s.pathsLock.RLock()
 		// FIXME: 对于peekaboo调度器单独计算，对于wt决策进行处理
 		var flag string
-		if sch.SchedulerName == "peek" {
+		if sch.SchedulerName == "peek" || sch.SchedulerName == "linucb" {
 			pth, flag = sch.selectPeekaboo(s, hasRetransmission, hasStreamRetransmission, fromPth)
-		}else {
+		} else {
 			pth = sch.selectPath(s, hasRetransmission, hasStreamRetransmission, fromPth)
 		}
 
@@ -1464,22 +1532,22 @@ func (sch *scheduler) sendPacket(s *session) error {
 
 		pkt, sent, err := sch.performPacketSending(s, windowUpdateFrames, pth)
 		if err != nil {
-			if err == ackhandler.ErrTooManyTrackedSentPackets{
+			if err == ackhandler.ErrTooManyTrackedSentPackets {
 				utils.Errorf("Closing episode")
-				if sch.SchedulerName == "dqnAgent" && sch.Training{
+				if sch.SchedulerName == "dqnAgent" && sch.Training {
 					sch.TrainingAgent.CloseEpisode(uint64(s.connectionID), -100, false)
 				}
 			}
 			return err
 		}
 		//TODO：记录下每次选择的路径
-		remoteip := pth.conn.RemoteAddr().String()
-		remoteip = remoteip[0:len(remoteip)-5]
-		remoteip = remoteip + "\n"
-		if !strings.Contains(remoteip, "10.0.5.2"){
-			writer.WriteString(remoteip)
-			writer.Flush()
-		}
+		//remoteip := pth.conn.RemoteAddr().String()
+		//remoteip = remoteip[0:len(remoteip)-5]
+		//remoteip = remoteip + "\n"
+		//if !strings.Contains(remoteip, "10.0.5.2"){
+		//	writer.WriteString(remoteip)
+		//	writer.Flush()
+		//}
 
 		windowUpdateFrames = nil
 		if !sent {

@@ -205,16 +205,17 @@ func populateServerConfig(config *Config) *Config {
 		KeepAlive:                             config.KeepAlive,
 		MaxReceiveStreamFlowControlWindow:     maxReceiveStreamFlowControlWindow,
 		MaxReceiveConnectionFlowControlWindow: maxReceiveConnectionFlowControlWindow,
-		SchedulerName:												 config.SchedulerName,
+		SchedulerName:                         config.SchedulerName,
 		//TODO:加入傳輸類型
-		Missiontype: config.Missiontype,
-		AHPs: config.AHPs,
-		Flagpth: config.Flagpth,
-		WeightsFile:													 config.WeightsFile,
-		Training:															 config.Training,
-		Epsilon:															 config.Epsilon,
-		AllowedCongestion:											config.AllowedCongestion,
-		DumpExperiences:												config.DumpExperiences,
+		Missiontype:       config.Missiontype,
+		AHPs:              config.AHPs,
+		Flagpth:           config.Flagpth,
+		Port:              config.Port,
+		WeightsFile:       config.WeightsFile,
+		Training:          config.Training,
+		Epsilon:           config.Epsilon,
+		AllowedCongestion: config.AllowedCongestion,
+		DumpExperiences:   config.DumpExperiences,
 	}
 }
 

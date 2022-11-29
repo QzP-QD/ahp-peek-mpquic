@@ -190,20 +190,21 @@ func populateClientConfig(config *Config) *Config {
 	}
 
 	return &Config{
-		Versions:                              versions,
-		HandshakeTimeout:                      handshakeTimeout,
-		IdleTimeout:                           idleTimeout,
-		SchedulerName: config.SchedulerName,
+		Versions:         versions,
+		HandshakeTimeout: handshakeTimeout,
+		IdleTimeout:      idleTimeout,
+		SchedulerName:    config.SchedulerName,
 		//TODO:加入傳輸類型
-		Missiontype: config.Missiontype,
-		AHPs: config.AHPs,
-		Flagpth: config.Flagpth,
+		Missiontype:                           config.Missiontype,
+		AHPs:                                  config.AHPs,
+		Flagpth:                               config.Flagpth,
+		Port:                                  config.Port,
 		RequestConnectionIDTruncation:         config.RequestConnectionIDTruncation,
 		MaxReceiveStreamFlowControlWindow:     maxReceiveStreamFlowControlWindow,
 		MaxReceiveConnectionFlowControlWindow: maxReceiveConnectionFlowControlWindow,
-		KeepAlive:      config.KeepAlive,
-		CacheHandshake: config.CacheHandshake,
-		CreatePaths:    config.CreatePaths,
+		KeepAlive:                             config.KeepAlive,
+		CacheHandshake:                        config.CacheHandshake,
+		CreatePaths:                           config.CreatePaths,
 	}
 }
 

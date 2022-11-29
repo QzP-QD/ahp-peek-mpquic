@@ -22,15 +22,17 @@ type path struct {
 	conn   connection
 	sess   *session
 
-	//TODO:加入rtt,loss和bth的存储结构
-	rtt 		float64
-	loss 		float64
-	bth			float64
+	ip string
 
-	rttscore 	float64
+	//TODO:加入rtt,loss和bth的存储结构
+	rtt  float64
+	loss float64
+	bth  float64
+
+	rttscore  float64
 	lossscore float64
-	bthscore 	float64
-	curscore float64
+	bthscore  float64
+	curscore  float64
 
 	rttStats *congestion.RTTStats
 

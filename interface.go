@@ -124,17 +124,19 @@ type Config struct {
 	// Should the host try to create new paths, if possible?
 	CreatePaths bool
 	//Arguments for agent
-	SchedulerName string
-	WeightsFile   string
-	Training      bool
-	Epsilon       float64
-	AllowedCongestion	int
-	DumpExperiences		bool
-//	TODO:加入傳輸任務類型
-	Missiontype		string
+	SchedulerName     string
+	WeightsFile       string
+	Training          bool
+	Epsilon           float64
+	AllowedCongestion int
+	DumpExperiences   bool
+	//	TODO:加入傳輸任務類型
+	Missiontype string
 	//TODO:TestAHP
-	AHPs [3]float64
+	AHPs    [3]float64
 	Flagpth string
+
+	Port string
 }
 
 // A Listener for incoming QUIC connections
